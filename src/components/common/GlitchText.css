@@ -1,0 +1,50 @@
+/* src/components/GlitchText.css */
+.glitch {
+  position: relative;
+  color: #39ff14; /* Neon Green */
+  font-size: 2.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.glitch:before,
+.glitch:after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #0d0d0d; /* Cyber Background */
+  overflow: hidden;
+}
+
+.glitch:before {
+  left: 2px;
+  text-shadow: -1px 0 red;
+  animation: glitch-anim-1 2s infinite linear alternate-reverse;
+}
+
+.glitch:after {
+  left: -2px;
+  text-shadow: -1px 0 blue;
+  animation: glitch-anim-2 2s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-anim-1 {
+  0% {
+    clip-path: inset(45% 0 50% 0);
+  }
+  100% {
+    clip-path: inset(55% 0 40% 0);
+  }
+}
+
+@keyframes glitch-anim-2 {
+  0% {
+    clip-path: inset(20% 0 75% 0);
+  }
+  100% {
+    clip-path: inset(80% 0 15% 0);
+  }
+}
