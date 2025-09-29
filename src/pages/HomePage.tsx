@@ -1,5 +1,3 @@
-// src/pages/HomePage.jsx
-import React from "react";
 import { Link } from "react-router-dom";
 import GlitchText from "../components/common/GlitchText";
 import { Button } from "../components/ui/button";
