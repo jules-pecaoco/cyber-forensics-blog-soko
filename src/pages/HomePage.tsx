@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import GlitchText from "../components/common/GlitchText";
 import { Button } from "../components/ui/button";
-import { Shield, Map, Users, FileText, ChevronDown } from "lucide-react";
+import { Map, Users, FileText, ChevronDown } from "lucide-react";
 
 const HomePage = () => {
   const [scrollY, setScrollY] = useState(0);

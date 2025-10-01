@@ -1,4 +1,3 @@
-import { Button } from "../components/ui/button";
 import AnimatedSection from "../components/common/AnimatedSection";
 import GlitchText from "../components/common/GlitchText";
 import Terminal from "../components/interactive/Terminal";
