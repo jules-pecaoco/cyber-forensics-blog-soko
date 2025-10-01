@@ -34,8 +34,8 @@ const Header = () => {
             <NavLink to="/blog" className={navLinkClass}>
               Intel Briefs
             </NavLink>
-            <NavLink to="/take-action" className={navLinkClass}>
-              Operation Center
+            <NavLink to="/map" className={navLinkClass}>
+              Mission Map
             </NavLink>
           </nav>
 
@@ -71,8 +71,8 @@ const Header = () => {
             <NavLink to="/blog" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
               Intel Briefs
             </NavLink>
-            <NavLink to="/take-action" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
-              Operation Center
+            <NavLink to="/map" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+              Mission Map
             </NavLink>
           </nav>
         )}
