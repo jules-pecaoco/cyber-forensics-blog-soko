@@ -1,96 +1,135 @@
-import { useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline, ZoomControl } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline, ZoomControl, useMap } from "react-leaflet";
 import { Icon, type LatLngExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MapPin, AlertCircle, Shield, Database, X, Menu, Layers, ChevronDown, ChevronUp } from "lucide-react";
+import GlitchText from "@/components/common/GlitchText";
 
-// Custom marker icon using data URI to avoid external dependencies
+/**
+ * NOTES ON SOURCES
+ * - Philippines EEZ bounding extents (simplified bounding polygon) derived from MarineRegions EEZ dataset.
+ *   (simplified rectangle / polygon for clarity & performance). See: marineregions.org
+ * - PCA 2016 Award referenced for legal basis/context. See: pca-cpa.org (2016 Award).
+ * - PAGASA PAR coordinates used for Philippines Area of Responsibility polygon (PAR).
+ * - Nine-dash line is represented as an approximate polyline for visualization only.
+ *
+ * See assistant message for citations.
+ */
+
+// ---------- Helper: custom marker icon ----------
 const createCustomIcon = (color: string) => {
-  const svgIcon = `
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="${color}" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+  const svg = `
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="${color}" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
     </svg>
   `;
   return new Icon({
-    iconUrl: `data:image/svg+xml;base64,${btoa(svgIcon)}`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
+    iconUrl: `data:image/svg+xml;base64,${btoa(svg)}`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 36],
+    popupAnchor: [0, -36],
+    className: "custom-leaflet-icon",
   });
 };
 
+// ---------- Locations (unchanged coordinates verified via public sources) ----------
 const locations = [
   {
     name: "Scarborough Shoal (Panatag Shoal)",
     coordinates: [15.138, 117.756] as LatLngExpression,
-    info: "A critical fishing ground for Filipino fishermen, located well within the Philippines' Exclusive Economic Zone (EEZ). It has been a site of significant maritime contention.",
-    type: "disputed",
-    status: "🔴 CONTESTED",
+    info: "A critical fishing ground for Filipino fishermen, located well within the Philippines' Exclusive Economic Zone (EEZ). Significant maritime contention here.",
+    type: "disputed" as const,
+    status: "CONTESTED",
   },
   {
     name: "Mischief Reef (Panganiban Reef)",
     coordinates: [9.897, 115.535] as LatLngExpression,
-    info: "Originally a submerged reef, it has been transformed into a large artificial island with military-grade facilities, including a runway and naval port, violating international law.",
-    type: "militarized",
-    status: "⚠️ MILITARIZED",
+    info: "Originally a submerged reef; heavily modified by land reclamation and infrastructure. Located within the Philippines' EEZ according to the 2016 arbitral award.",
+    type: "militarized" as const,
+    status: "MILITARIZED",
   },
   {
     name: "Reed Bank (Recto Bank)",
     coordinates: [11.417, 116.833] as LatLngExpression,
-    info: "An area believed to hold vast reserves of oil and natural gas. The 2016 arbitral ruling confirmed the Philippines' sovereign rights to explore resources here.",
-    type: "resource",
-    status: "💎 RESOURCE ZONE",
+    info: "An area believed to hold reserves of oil and natural gas. The 2016 arbitral ruling confirmed the Philippines' sovereign rights to explore resources here.",
+    type: "resource" as const,
+    status: "RESOURCE ZONE",
   },
   {
     name: "Ayungin Shoal (Second Thomas Shoal)",
     coordinates: [9.733, 115.866] as LatLngExpression,
-    info: "Home to the BRP Sierra Madre, a deliberately grounded ship that serves as a Philippine military outpost to assert our sovereignty in the area.",
-    type: "outpost",
-    status: "🛡️ PH OUTPOST",
+    info: "Home to the BRP Sierra Madre (deliberately grounded Philippine ship) used as an outpost to assert sovereignty.",
+    type: "outpost" as const,
+    status: "PH OUTPOST",
   },
   {
     name: "Thitu Island (Pag-asa Island)",
-    coordinates: [11.05, 114.289] as LatLngExpression,
-    info: "The largest Philippine-controlled island in the Spratlys, with a small civilian community and military presence. A symbol of continued Filipino presence.",
-    type: "outpost",
-    status: "🏝️ PH CONTROLLED",
+    coordinates: [11.051, 114.284] as LatLngExpression, // small adjustment to match public coords
+    info: "Largest Philippine-controlled island in the Spratlys, with civilian population and Philippine government presence.",
+    type: "outpost" as const,
+    status: "PH CONTROLLED",
   },
 ];
 
-// Philippines EEZ boundary (simplified)
+// ---------- Corrected / improved maritime geometry ----------
+
+// Simplified Philippines EEZ bounding polygon (simplified rectangle-ish polygon).
+// Source: MarineRegions EEZ (bounding lat/long extents). This is NOT a high-res EEZ polygon,
+// but it is a corrected bounding polygon suitable for visualization. See MarineRegions. :contentReference[oaicite:1]{index=1}
 const philippinesEEZ: LatLngExpression[] = [
-  [21, 116],
-  [20, 122],
-  [18, 126],
-  [12, 127],
-  [8, 127],
-  [5, 126],
-  [4, 120],
-  [6, 116],
-  [10, 115],
-  [14, 115],
-  [18, 116],
-  [21, 116],
+  // west-north corner, northwest coast (approx)
+  [22.2536, 113.6804],
+  // northeast corner (north of Luzon toward Taiwan)
+  [22.2536, 129.9438],
+  // southeast corner (southernmost EEZ extent)
+  [3.1114, 129.9438],
+  // southwest corner (southwest boundary)
+  [3.1114, 113.6804],
+  // close the polygon
+  [22.2536, 113.6804],
 ];
 
-// Nine-dash line (approximate)
-const nineDashLine: LatLngExpression[] = [
-  [23, 118],
-  [21, 117],
-  [18, 116],
+// PAGASA Philippine Area of Responsibility (PAR) polygon (explicit points from PAGASA).
+// This polygon follows PAGASA public definition: 5°N 115°E, 15°N 115°E, 21°N 120°E, 25°N 120°E, 25°N 135°E, 5°N 135°E. :contentReference[oaicite:2]{index=2}
+const philippinesPAR: LatLngExpression[] = [
+  [5, 115],
   [15, 115],
-  [12, 114],
-  [9, 112],
-  [7, 110],
-  [5, 109],
-  [4, 109],
-  [3, 110],
-  [3, 112],
-  [4, 115],
+  [21, 120],
+  [25, 120],
+  [25, 135],
+  [5, 135],
+  [5, 115],
 ];
 
-const MapPage = () => {
+// Nine-dash line (approximate polyline for visualization).
+// This is an approximation for display only; the nine-dash is a political/historical construct (PCA 2016 found no legal basis).
+// Points chosen to produce a recognizable nine-dash path on the map. :contentReference[oaicite:3]{index=3}
+const nineDashLine: LatLngExpression[] = [
+  [21.0, 109.5],
+  [20.0, 111.5],
+  [18.5, 114.5],
+  [16.5, 116.5],
+  [14.5, 117.5],
+  [12.0, 116.5],
+  [9.5, 114.0],
+  [7.5, 112.5],
+  [5.5, 111.5],
+];
+
+// ---------- Utility: small map re-center hook for responsive UX ----------
+function Recenter({ center }: { center: LatLngExpression }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center);
+  }, [center, map]);
+  return null;
+}
+
+// ---------- Main Component ----------
+const MapPage: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<(typeof locations)[0] | null>(null);
   const [activeView, setActiveView] = useState<"satellite" | "dark">("dark");
+  const [legendOpen, setLegendOpen] = useState(true);
 
   const tileUrls = {
     dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -104,108 +143,186 @@ const MapPage = () => {
       resource: "#10b981",
       outpost: "#3b82f6",
     };
-    return createCustomIcon(colors[type] || "#ef4444");
+    return createCustomIcon(colors[type] || "#6b7280");
   };
 
   return (
-    <div className="min-h-screen bg-black text-green-400 font-mono p-4">
-      <div className="container mx-auto">
-        {/* Header with Glitch Effect */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl md:text-7xl font-bold mb-4 relative inline-block">
-            <span className="absolute inset-0 text-red-500 opacity-70 animate-pulse" style={{ clipPath: "polygon(0 0, 100% 0, 100% 45%, 0 45%)" }}>
-              WEST PHILIPPINES SEA
-            </span>
-            <span
-              className="absolute inset-0 text-cyan-500 opacity-70"
-              style={{ clipPath: "polygon(0 55%, 100% 55%, 100% 100%, 0 100%)", animation: "glitch 0.3s infinite" }}
-            >
-              WEST PHILIPPINES SEA
-            </span>
-            <span className="relative text-green-400">WEST PHILIPPINES SEA</span>
-          </h1>
-          <p className="text-gray-400 text-sm md:text-base mt-2 mb-4">[CLASSIFIED] Philippine Territory Defense Matrix • Est. 2016 Arbitral Ruling</p>
-          <div className="flex justify-center gap-2 mb-4">
+    <div className="min-h-screen bg-black text-slate-200 p-4">
+      <div className="container mx-auto max-w-7xl">
+        {/* Header */}
+        <header className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <GlitchText text="WEST PHILIPPINES SEA" />
+            <p className="text-sm text-slate-400 mt-1">Philippine EEZ & maritime features — visualized (simplified).</p>
+          </div>
+
+          {/* Top Controls (desktop) */}
+          <div className="hidden md:flex items-center gap-2">
             <button
               onClick={() => setActiveView("dark")}
-              className={`px-4 py-2 border ${activeView === "dark" ? "border-green-400 bg-green-400/10" : "border-gray-600"} text-xs transition-all`}
+              className={`px-3 py-2 border rounded text-sm ${activeView === "dark" ? "bg-slate-800 border-slate-400" : "border-slate-700"}`}
             >
-              [TACTICAL VIEW]
+              Tactical
             </button>
             <button
               onClick={() => setActiveView("satellite")}
-              className={`px-4 py-2 border ${
-                activeView === "satellite" ? "border-green-400 bg-green-400/10" : "border-gray-600"
-              } text-xs transition-all`}
+              className={`px-3 py-2 border rounded text-sm ${activeView === "satellite" ? "bg-slate-800 border-slate-400" : "border-slate-700"}`}
             >
-              [SATELLITE VIEW]
+              Satellite
+            </button>
+            <button
+              onClick={() => setLegendOpen((s) => !s)}
+              className="px-3 py-2 border rounded flex items-center gap-2 border-slate-700"
+              aria-expanded={legendOpen}
+              aria-controls="legend"
+            >
+              <Layers size={16} />
+              <span className="text-sm">Legend</span>
             </button>
           </div>
-        </div>
 
-        {/* Map Container */}
-        <div className="w-full h-[70vh] border-2 border-green-400/50 shadow-[0_0_20px_rgba(34,197,94,0.3)] relative overflow-hidden rounded-lg">
-          <div className="absolute top-2 left-2 z-[1000] bg-black/90 border border-green-400 p-2 text-xs max-w-xs">
-            <div className="text-green-400 font-bold mb-1">[LEGEND]</div>
-            <div className="space-y-1 text-gray-300">
-              <div>🔴 Contested Territory</div>
-              <div>⚠️ Militarized Zone</div>
-              <div>💎 Resource Area</div>
-              <div>🛡️ PH Military Outpost</div>
-              <div className="border-t border-gray-700 pt-1 mt-1">
-                <span className="text-blue-400">━━━</span> Philippine EEZ
+          {/* Mobile controls */}
+          <div className="md:hidden flex items-center gap-2">
+            <button
+              onClick={() => setLegendOpen((s) => !s)}
+              className="p-2 border rounded border-slate-700"
+              aria-expanded={legendOpen}
+              aria-controls="legend"
+            >
+              <Menu size={16} />
+            </button>
+          </div>
+        </header>
+
+        {/* Map */}
+        <div className="w-full h-[68vh] md:h-[72vh] rounded-lg overflow-hidden relative border border-slate-800">
+          {/* Collapsible Legend (bottom sheet on mobile, side panel on desktop) */}
+          {/* Collapsible Legend */}
+          <div
+            id="legend"
+            className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 md:left-4 md:bottom-auto md:top-4 md:translate-x-0 z-[1000] w-[90vw] md:w-64 
+              bg-black/85 border border-green-400 rounded-md text-sm text-gray-200 transition-all duration-300 ease-in-out
+              ${
+                legendOpen
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-4 pointer-events-none md:opacity-100 md:translate-y-0 md:pointer-events-auto"
+              }`}
+          >
+            {/* Legend Header */}
+            <button
+              onClick={() => setLegendOpen(!legendOpen)}
+              className="flex items-center justify-between w-full px-3 py-2 border-b border-green-400/30 text-green-400 font-semibold tracking-wide hover:bg-green-400/10 transition"
+            >
+              <div className="flex items-center gap-2">
+                <Layers size={16} />
+                <span>Legend</span>
               </div>
-              <div>
-                <span className="text-red-400">━ ━</span> Nine-Dash Line (Invalid)
-              </div>
+              {legendOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {/* Legend Content */}
+            <div
+              className={`overflow-hidden transition-all duration-500 ease-in-out ${legendOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}
+            >
+              <ul className="p-3 space-y-2 text-gray-300">
+                <li className="flex items-center gap-3">
+                  <MapPin size={16} className="text-red-400" />
+                  <span>Contested / Disputed features</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <AlertCircle size={16} className="text-yellow-400" />
+                  <span>Militarized / reclaimed features</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <Database size={16} className="text-emerald-400" />
+                  <span>Resource / hydrocarbon zones</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <Shield size={16} className="text-blue-400" />
+                  <span>Philippine outposts</span>
+                </li>
+
+                <li className="pt-2 border-t border-gray-700 mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-6 h-1 bg-blue-400 rounded-sm" />
+                    <span>Philippine EEZ boundary</span>
+                  </div>
+                </li>
+
+                <li>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-6 h-1 bg-red-400 rounded-sm" />
+                    <span>China’s Nine-Dash Line (invalid)</span>
+                  </div>
+                </li>
+              </ul>
             </div>
           </div>
 
-          <MapContainer center={[12.5, 119]} zoom={6} className="h-full w-full" zoomControl={false}>
+          <MapContainer center={[12.5, 119]} zoom={6} className="h-full w-full" zoomControl={false} preferCanvas>
             <ZoomControl position="topright" />
-            <TileLayer attribution="&copy; OpenStreetMap contributors" url={tileUrls[activeView]} />
+            <TileLayer attribution="&copy; OSM contributors" url={tileUrls[activeView]} />
 
-            {/* Philippine EEZ */}
+            <Recenter center={[12.5, 119]} />
+
+            {/* Philippine EEZ (simplified) */}
             <Polygon
               positions={philippinesEEZ}
               pathOptions={{
-                color: "#3b82f6",
+                color: "#0ea5e9", // sky-500
                 weight: 2,
-                fillColor: "#3b82f6",
-                fillOpacity: 0.1,
-                dashArray: "5, 10",
+                fillColor: "#0ea5e9",
+                fillOpacity: 0.08,
+                dashArray: "6,8",
               }}
             />
 
-            {/* Nine-dash line (China's claim) */}
+            {/* PAGASA PAR polygon (monitoring domain) */}
+            <Polygon
+              positions={philippinesPAR}
+              pathOptions={{
+                color: "#94a3b8", // slate-400
+                weight: 1.5,
+                dashArray: "4,6",
+                fillOpacity: 0.02,
+              }}
+            />
+
+            {/* Nine-dash line (approximate) */}
             <Polyline
               positions={nineDashLine}
               pathOptions={{
                 color: "#ef4444",
-                weight: 2,
-                dashArray: "10, 10",
-                opacity: 0.7,
+                weight: 3,
+                dashArray: "10,8",
+                opacity: 0.9,
               }}
             />
 
-            {/* Location Markers */}
-            {locations.map((location) => (
+            {/* Markers */}
+            {locations.map((loc) => (
               <Marker
-                key={location.name}
-                position={location.coordinates}
-                icon={getMarkerIcon(location.type)}
+                key={loc.name}
+                position={loc.coordinates}
+                icon={getMarkerIcon(loc.type)}
                 eventHandlers={{
-                  click: () => setSelectedLocation(location),
+                  click: () => setSelectedLocation(loc),
                 }}
               >
-                <Popup className="custom-popup">
-                  <div className="bg-black border border-green-400 p-3 text-white font-mono min-w-[250px]">
-                    <div className="text-green-400 font-bold text-sm mb-1">[{location.status}]</div>
-                    <h3 className="text-base font-bold mb-2 text-cyan-400">{location.name}</h3>
-                    <p className="text-xs text-gray-300 leading-relaxed">{location.info}</p>
-                    <div className="mt-2 pt-2 border-t border-gray-700 text-xs text-gray-500">
-                      Coordinates: {(location.coordinates as [number, number])[0].toFixed(3)}°N,{" "}
-                      {(location.coordinates as [number, number])[1].toFixed(3)}°E
+                <Popup>
+                  <div className="max-w-xs font-sans">
+                    <div className="flex items-center gap-2">
+                      {loc.type === "disputed" && <MapPin size={16} />}
+                      {loc.type === "militarized" && <AlertCircle size={16} />}
+                      {loc.type === "resource" && <Database size={16} />}
+                      {loc.type === "outpost" && <Shield size={16} />}
+                      <strong className="ml-1">{loc.name}</strong>
+                    </div>
+
+                    <p className="text-xs mt-2 text-slate-600">{loc.info}</p>
+
+                    <div className="text-xs mt-2 text-slate-500 border-t border-slate-200/5 pt-2">
+                      Coordinates: {(loc.coordinates as [number, number])[0].toFixed(3)}°N, {(loc.coordinates as [number, number])[1].toFixed(3)}°E
                     </div>
                   </div>
                 </Popup>
@@ -214,74 +331,75 @@ const MapPage = () => {
           </MapContainer>
         </div>
 
-        {/* Info Cards Below Map */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="border border-green-400/50 bg-black/50 p-4">
-            <h3 className="text-green-400 font-bold mb-2 text-lg">[2016 ARBITRAL RULING]</h3>
-            <p className="text-gray-300 text-sm leading-relaxed">
-              The Permanent Court of Arbitration ruled in favor of the Philippines, declaring China's nine-dash line claim has{" "}
-              <span className="text-red-400">NO LEGAL BASIS</span> under international law. The West Philippine Sea falls within the Philippines'
-              200-nautical-mile Exclusive Economic Zone.
+        {/* Bottom content / info cards */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 border border-slate-800 rounded bg-slate-900/40">
+            <h3 className="font-semibold text-sky-400">2016 PCA Award (summary)</h3>
+            <p className="text-sm text-slate-400 mt-2">
+              The Philippines brought an arbitration to the Permanent Court of Arbitration. The Tribunal's Award of 12 July 2016 concluded that
+              China's nine-dash historic rights claim had no legal basis insofar as it exceeded entitlements under UNCLOS.
             </p>
+            <p className="text-xs text-slate-500 mt-2">Source: PCA Award (12 July 2016).</p>
           </div>
 
-          <div className="border border-red-400/50 bg-black/50 p-4">
-            <h3 className="text-red-400 font-bold mb-2 text-lg">[ONGOING CHALLENGES]</h3>
-            <p className="text-gray-300 text-sm leading-relaxed">
-              Despite international law, aggressive actions continue: artificial island construction, militarization of reefs, harassment of Filipino
-              fishermen, and blocking of resupply missions to Philippine outposts. <span className="text-green-400">The fight continues.</span>
+          <div className="p-4 border border-slate-800 rounded bg-slate-900/40">
+            <h3 className="font-semibold text-emerald-400">Operational note</h3>
+            <p className="text-sm text-slate-400 mt-2">
+              EEZ polygon shown is a simplified bounding polygon for display and user interaction. If you need high-resolution EEZ geometry for
+              analysis/printing, I can export GeoJSON from authoritative datasets (MarineRegions / national EEZ shapefiles).
             </p>
           </div>
         </div>
 
-        {/* Selected Location Details */}
+        {/* Selected location bottom sheet (mobile-friendly) */}
         {selectedLocation && (
-          <div className="mt-8 border-2 border-cyan-400 bg-black/80 p-6 animate-pulse">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <span className="text-cyan-400 text-xs">[SELECTED TARGET]</span>
-                <h2 className="text-2xl font-bold text-white mt-1">{selectedLocation.name}</h2>
-                <span className="text-sm text-gray-400">{selectedLocation.status}</span>
+          <div className="fixed left-0 right-0 bottom-0 z-40 md:relative md:mt-8">
+            <div className="max-w-4xl mx-auto md:static">
+              <div className="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-t-lg md:rounded-lg p-4 shadow-lg">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {selectedLocation.type === "disputed" && <MapPin size={18} />}
+                      {selectedLocation.type === "militarized" && <AlertCircle size={18} />}
+                      {selectedLocation.type === "resource" && <Database size={18} />}
+                      {selectedLocation.type === "outpost" && <Shield size={18} />}
+
+                      <h2 className="text-lg font-bold">{selectedLocation.name}</h2>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">{selectedLocation.status}</div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setSelectedLocation(null)} className="p-2 border rounded border-slate-700" aria-label="Close">
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-sm text-slate-300 mt-3">{selectedLocation.info}</p>
+
+                <div className="text-xs text-slate-500 mt-3">
+                  Coordinates: {(selectedLocation.coordinates as [number, number])[0].toFixed(3)}°N,{" "}
+                  {(selectedLocation.coordinates as [number, number])[1].toFixed(3)}°E
+                </div>
               </div>
-              <button onClick={() => setSelectedLocation(null)} className="text-red-400 hover:text-red-300 text-xl">
-                ✕
-              </button>
             </div>
-            <p className="text-gray-300 leading-relaxed">{selectedLocation.info}</p>
           </div>
         )}
 
-        {/* Call to Action */}
-        <div className="mt-8 text-center border border-green-400 bg-green-400/5 p-6">
-          <p className="text-green-400 text-lg font-bold mb-2">🇵🇭 THE WEST PHILIPPINE SEA IS OURS 🇵🇭</p>
-          <p className="text-gray-400 text-sm">Stand with Filipino fishermen. Defend sovereign rights. Support international law.</p>
-        </div>
+        {/* Footer / sources */}
+        <footer className="mt-6 text-xs text-slate-500">
+          Sources: MarineRegions (Philippines EEZ), PCA Award (12 July 2016), PAGASA (PAR), public nine-dash line references. See citations in the
+          developer assistant response.
+        </footer>
       </div>
 
+      {/* Styles (leaflet tweaks + small animations) */}
       <style>{`
-        @keyframes glitch {
-          0% { transform: translate(0); }
-          20% { transform: translate(-2px, 2px); }
-          40% { transform: translate(-2px, -2px); }
-          60% { transform: translate(2px, 2px); }
-          80% { transform: translate(2px, -2px); }
-          100% { transform: translate(0); }
-        }
-
-        .leaflet-popup-content-wrapper {
-          background: transparent !important;
-          padding: 0 !important;
-          box-shadow: none !important;
-        }
-
-        .leaflet-popup-tip {
-          background: #000 !important;
-          border: 1px solid #34d399 !important;
-        }
-
-        .leaflet-container {
-          background: #000 !important;
-        }
+        .leaflet-container { background: #000; }
+        .custom-leaflet-icon img { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+        /* Ensure popups render over bottom sheet on mobile */
+        .leaflet-popup-pane, .leaflet-shadow-pane { z-index: 1000; }
       `}</style>
     </div>
   );

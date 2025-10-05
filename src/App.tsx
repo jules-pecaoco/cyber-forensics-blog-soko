@@ -5,6 +5,7 @@ import DossierPage from "./pages/DossierPage";
 import BlogPage from "./pages/BlogPage";
 import TakeActionPage from "./pages/TakeActionPage";
 import MapPage from "./pages/MapPage";
+import AboutPage from "./pages/AboutPage";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
             <Route path="/blog" element={<BlogPage />} />
             <Route path="/take-action" element={<TakeActionPage />} />
             <Route path="/map" element={<MapPage />} />
+            <Route path="/about" element={<AboutPage />} />
           </Routes>
         </main>
       </div>

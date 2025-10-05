@@ -37,6 +37,9 @@ const Header = () => {
             <NavLink to="/map" className={navLinkClass}>
               Mission Map
             </NavLink>
+            <NavLink to="/about" className={navLinkClass}>
+              Command Roster
+            </NavLink>
           </nav>
 
           {/* Mobile Menu Button */}
@@ -73,6 +76,9 @@ const Header = () => {
             </NavLink>
             <NavLink to="/map" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
               Mission Map
+            </NavLink>
+            <NavLink to="/about" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+              Command Roster
             </NavLink>
           </nav>
         )}
