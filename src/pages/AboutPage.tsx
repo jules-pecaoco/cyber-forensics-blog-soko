@@ -1,5 +1,3 @@
-// src/pages/AboutPage.jsx
-import React from "react";
 import AnimatedSection from "../components/common/AnimatedSection";
 import GlitchText from "../components/common/GlitchText";
 import ProfileCard from "../components/common/ProfileCard";
