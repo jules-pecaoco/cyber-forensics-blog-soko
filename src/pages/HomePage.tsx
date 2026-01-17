@@ -264,6 +264,13 @@ const HomePage = () => {
         </motion.div>
       </div>
 
+      {/* Developers Footer */}
+      <div className="relative z-10 py-6 px-4 border-t border-green-400/30 bg-black/50 backdrop-blur-sm">
+        <div className="container mx-auto max-w-6xl text-center">
+          <p className="text-gray-400 text-xs font-mono">Developed by Jules Alfonz R. Pecaoco. © {new Date().getFullYear()} All rights reserved.</p>
+        </div>
+      </div>
+
       <style>{`
         @keyframes scan {
           0% {
